@@ -1,6 +1,6 @@
 # Sunflower Variant Calling Pipeline
 
-This repository contains a pipeline for variant calling in sunflower genomes using a series of PBS scripts. The pipeline is split into three main stages: trimming, alignment, and duplication removal; variant calling with GATK HaplotypeCaller; and joint genotyping across multiple samples. 
+This repository contains a pipeline for variant calling in sunflower genomes using a series of PBS scripts. The pipeline is split into three main stages: trimming, alignment, and duplication removal; variant calling with GATK HaplotypeCaller; and joint genotyping across multiple samples. *GATK4.6.0_generateGVCFs_HA412HOv2cpmt.pbs* is a precursor to this version and is no longer used.
 
 ## Pipeline Overview
 
