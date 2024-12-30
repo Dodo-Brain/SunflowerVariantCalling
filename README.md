@@ -28,7 +28,7 @@ The pipeline consists of the following modules:
 - fastp
 - bwa-mem2
 - mosdepth_d4
-- gatk
+- gatk v4.6.0
 
 ## Detailed Description of Each Script
 
