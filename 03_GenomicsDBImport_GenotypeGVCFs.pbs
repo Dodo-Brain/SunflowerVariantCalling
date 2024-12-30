@@ -1,0 +1,83 @@
+#!/bin/bash
+#PBS -N GenomicsDBImport_GenotypeGVCFs
+#PBS -q default
+#PBS -l select=1:ncpus=64:mem=500gb
+#PBS -l walltime=24:00:00
+#PBS -J 1-17
+#PBS -j oe
+#PBS -W group_list=x-ccast-prj-hulke
+
+set -euo pipefail
+
+################
+# Check if arguments were provided and exist
+
+REQUIRED_ARGS=("SAMPLE_LIST" "GVCF_DIR" "COHORT" "OUT_DIR")
+
+check_argument() {
+local arg_name=$1
+if [ -z $arg_name ]; then
+	echo "Error: Required arguments are missing"
+	echo "Usage: qsub -v SAMPLE_LIST=/path/to/list.txt,GVCF_DIR=/path/to/gvcfs,COHORT=cohort_name,OUT_DIR=/where/want/vcfs"
+	exit 1
+fi
+}
+
+echo "Checking required arguments..."
+for arg in ${REQUIRED_ARGS[@]}; do
+	check_argument $arg
+done
+
+if [ ! -f $SAMPLE_LIST ]; then
+	echo "Error: $SAMPLE_LIST not found."
+	exit 1
+fi
+
+if [ ! -d $GVCF_DIR ]; then
+	echo "Error: $GVCF_DIR not found."
+	exit 1
+fi
+
+################
+# set variables
+genome_dir=/mmfs1/projects/brent.hulke/sunflower_reference_genomes/HA412HOv2_w_CPMT
+ref=$genome_dir/Ha412HOv2_w_CPMT.fa
+chromosomes=$genome_dir/17_chromosomes_Ha412HOv2.list
+chrom=$(sed -n "${PBS_ARRAY_INDEX}p" $chromosomes)
+sample_list=$SAMPLE_LIST
+gvcf_dir=$GVCF_DIR
+cohort=$COHORT
+out_dir=$OUT_DIR
+
+################
+# MAIN
+# make sample name map required by GenomicsDBImport: matches sample names to gvcf file paths
+start=$(date +%s)
+cd $SCRATCH
+ls $gvcf_dir/$chrom/*g.vcf.gz > tmp$chrom
+grep -Ff $sample_list tmp$chrom > tmp2$chrom
+paste $sample_list tmp2$chrom > $SCRATCH/$cohort.$chrom.sample_map
+rm tmp$chrom tmp2$chrom
+
+# make seperate db for each of 17 chroms (uses job array as specified in header)
+module load gatk
+gatk GenomicsDBImport \
+	--genomicsdb-workspace-path $SCRATCH/$cohort.$chrom.gdb \
+	--sample-name-map $SCRATCH/$cohort.$chrom.sample_map \
+	-L $chrom \
+	--tmp-dir $SCRATCH \
+	--reader-threads 64 \
+	--overwrite-existing-genomicsdb-workspace
+
+# get cohort vcf for each chrom
+gatk GenotypeGVCFs \
+	-R $ref \
+	-V gendb://$SCRATCH/$cohort.$chrom.gdb \
+	-L $chrom \
+	--heterozygosity 0.01 \
+	--heterozygosity-stdev 0.1 \
+	-O $out_dir/$cohort.$chrom.vcf.gz
+
+end=$(date +%s)
+time_elapsed=$((end-start))
+echo "Total time: $time_elapsed seconds"
