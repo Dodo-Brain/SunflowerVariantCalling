@@ -79,7 +79,7 @@ $software/fastp \
 		- $out_dir/$sample.bam
 
 samtools index $out_dir/$sample.bam
-$software/mosdepth_d4 -t 16 --d4 $out_dir/mosdepth_out/$sample $out_dir/$sample.bam
+$software/mosdepth_d4 -t 16 --no-per-base --d4 $out_dir/mosdepth_out/$sample $out_dir/$sample.bam
 samtools flagstat -@ 16 $out_dir/$sample.bam > $out_dir/flagstat_out/$sample.flagstat
 
 ################
