@@ -9,12 +9,9 @@
 
 set -euo pipefail
 
-################
 # REQUIRED_ARGS: "SAMPLE_LIST" "GVCF_DIR" "COHORT" "OUT_DIR"
+# This script is designed to take a TWO-COLUMN, TAB-DELIMITED sample map.
 
-# Usage: qsub -v SAMPLE_LIST=/path/to/list.txt,GVCF_DIR=/path/to/gvcfs,COHORT=cohort_name,OUT_DIR=/where/want/vcfs 03_GenomicsDBImport_GenotypeGVCFs.pbs
-
-################
 # set variables
 genome_dir=/mmfs1/projects/brent.hulke/sunflower_reference_genomes/HA412HOv2_w_CPMT
 ref=$genome_dir/Ha412HOv2_w_CPMT.fa
@@ -25,27 +22,31 @@ gvcf_dir=$GVCF_DIR
 cohort=$COHORT
 out_dir=$OUT_DIR
 
-################
 # MAIN
-# make sample name map required by GenomicsDBImport: matches sample names to gvcf file paths
 start=$(date +%s)
 cd $SCRATCH
-rm -f $SCRATCH/$cohort.$chrom.sample_map
+FINAL_MAP_FILE="$SCRATCH/$cohort.$chrom.sample_map"
+> "$FINAL_MAP_FILE" # Clear or create the map file
 
-sort $sample_list | while read -r sample; do
-    file=$(ls $gvcf_dir/$chrom/${sample}*.g.vcf.gz 2>/dev/null)
+# This loop reads your original two-column file.
+# It reads the first column into 'sample_name' and the second into 'file_identifier'.
+while IFS=$'\t' read -r sample_name file_identifier || [[ -n "$sample_name" ]]; do
+    # Find the corresponding GVCF file using the identifier from column 2.
+    file=$(find "$gvcf_dir/$chrom/" -name "${file_identifier}*.g.vcf.gz" 2>/dev/null | head -n 1)
+    
+    # If a file was found, write the correct two-column output.
     if [[ -n "$file" ]]; then
-        echo -e "$sample\t$file" >> $SCRATCH/$cohort.$chrom.sample_map
+        echo -e "$sample_name\t$file" >> "$FINAL_MAP_FILE"
     else
-        echo "Warning: No matching file found for sample $sample" >&2
+        echo "Warning: No GVCF file found for identifier '$file_identifier' on chromosome $chrom" >&2
     fi
-done
+done < "$sample_list"
 
-# make seperate db for each of 17 chroms (uses job array as specified in header)
+# make seperate db for each of 17 chroms
 module load gatk
 gatk --java-options "-Xmx125g -XX:ParallelGCThreads=16" GenomicsDBImport \
 	--genomicsdb-workspace-path $SCRATCH/$cohort.$chrom.gdb \
-	--sample-name-map $SCRATCH/$cohort.$chrom.sample_map \
+	--sample-name-map "$FINAL_MAP_FILE" \
 	-L $chrom \
 	--tmp-dir $SCRATCH \
 	--reader-threads 16 \
